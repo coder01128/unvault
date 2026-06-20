@@ -1,0 +1,780 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>unVault — Batch PDF Unlocker</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- pdf.js: decrypts password-protected PDFs and renders pages to canvas -->
+  <script src="https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+  <!-- pdf-lib: creates clean output PDFs (text-selectable when possible) -->
+  <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+  <!-- JSZip: bundles multiple output PDFs into a single download -->
+  <script src="https://unpkg.com/jszip@3.10.1/dist/jszip.min.js"></script>
+  <!-- FileSaver.js: triggers the zip download reliably across browsers -->
+  <script src="https://unpkg.com/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+
+  <style>
+    /* ── Design tokens ─────────────────────────────────────────── */
+    :root {
+      --bg:         #0a0a0a;
+      --bg-card:    #111111;
+      --border:     #222222;
+      --text:       #ffffff;
+      --muted:      #888888;
+      --gold:       #FFD700;
+      --gold-hover: #FFE033;
+      --err:        #ff4444;
+      --r:          8px;
+      --r-lg:       12px;
+    }
+
+    /* ── Reset ──────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Layout ─────────────────────────────────────────────────── */
+    #app {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem 2rem;
+      width: 100%;
+      flex: 1;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────── */
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+    }
+
+    .logo {
+      font-size: 2.8rem;
+      font-weight: 700;
+      letter-spacing: -0.04em;
+      margin-bottom: 0.4rem;
+      line-height: 1;
+    }
+
+    .logo .gold { color: var(--gold); }
+
+    .tagline {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    /* ── Drop zone ──────────────────────────────────────────────── */
+    #upload-area { margin-bottom: 1.5rem; }
+
+    #drop-zone {
+      border: 2px dashed #333;
+      border-radius: var(--r-lg);
+      background: var(--bg-card);
+      padding: 3rem 2rem;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      user-select: none;
+    }
+
+    #drop-zone:hover,
+    #drop-zone.drag-over {
+      border-color: var(--gold);
+      background: #131300;
+    }
+
+    .drop-icon {
+      font-size: 2.5rem;
+      margin-bottom: 1rem;
+      pointer-events: none;
+    }
+
+    #drop-zone p {
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.6;
+      pointer-events: none;
+    }
+
+    #drop-zone strong { color: var(--text); }
+
+    .privacy-badge {
+      text-align: center;
+      font-size: 0.78rem;
+      color: #555;
+      margin-top: 0.75rem;
+    }
+
+    /* ── Progress ───────────────────────────────────────────────── */
+    #progress-section {
+      display: none;
+      margin-bottom: 1.25rem;
+    }
+
+    .progress-label {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+    }
+
+    .progress-track {
+      height: 3px;
+      background: #222;
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--gold);
+      border-radius: 2px;
+      transition: width 0.25s ease;
+      width: 0%;
+    }
+
+    /* ── File list ──────────────────────────────────────────────── */
+    #files-section { display: none; margin-bottom: 1.25rem; }
+
+    .files-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.6rem;
+    }
+
+    .files-header h3 {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    #add-more {
+      font-size: 0.82rem;
+      color: var(--gold);
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-family: inherit;
+      padding: 0;
+      visibility: hidden;
+    }
+
+    #add-more:hover { text-decoration: underline; }
+
+    #file-list {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      overflow: hidden;
+    }
+
+    .file-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.7rem 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .file-row:last-child { border-bottom: none; }
+
+    .file-name {
+      font-size: 0.88rem;
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .file-meta {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+
+    .file-status {
+      font-size: 0.78rem;
+      white-space: nowrap;
+      min-width: 120px;
+      text-align: right;
+    }
+
+    .file-status.pending    { color: var(--muted); }
+    .file-status.processing { color: var(--text); }
+    .file-status.done       { color: var(--gold); }
+    .file-status.failed     { color: var(--err); }
+
+    .remove-btn {
+      background: none;
+      border: none;
+      color: #444;
+      cursor: pointer;
+      font-size: 0.9rem;
+      padding: 0.25rem 0.35rem;
+      line-height: 1;
+      border-radius: 4px;
+      transition: color 0.12s, background 0.12s;
+    }
+
+    .remove-btn:hover { color: var(--err); background: rgba(255,68,68,0.08); }
+    .hidden { display: none !important; }
+
+    /* ── Controls ───────────────────────────────────────────────── */
+    #controls { display: none; margin-bottom: 1rem; }
+
+    .pw-wrap {
+      position: relative;
+      margin-bottom: 0.75rem;
+    }
+
+    #password {
+      width: 100%;
+      padding: 0.8rem 3.5rem 0.8rem 1rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    #password:focus { border-color: #3a3a3a; }
+    #password::placeholder { color: #444; }
+
+    #toggle-pw {
+      position: absolute;
+      right: 0.85rem;
+      top: 50%;
+      transform: translateY(-50%);
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 0.78rem;
+      font-family: inherit;
+      font-weight: 500;
+      padding: 0;
+      letter-spacing: 0.02em;
+    }
+
+    #toggle-pw:hover { color: var(--text); }
+
+    /* ── Buttons ─────────────────────────────────────────────────── */
+    .btn-primary {
+      display: block;
+      width: 100%;
+      padding: 0.9rem;
+      background: var(--gold);
+      color: #000;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 700;
+      border: none;
+      border-radius: var(--r);
+      cursor: pointer;
+      transition: background 0.15s;
+      text-align: center;
+      letter-spacing: -0.01em;
+    }
+
+    .btn-primary:hover:not(:disabled) { background: var(--gold-hover); }
+
+    .btn-primary:disabled {
+      background: #333;
+      color: #555;
+      cursor: not-allowed;
+    }
+
+    .btn-secondary {
+      display: block;
+      width: 100%;
+      padding: 0.85rem;
+      background: transparent;
+      color: var(--muted);
+      font-family: inherit;
+      font-size: 0.95rem;
+      font-weight: 500;
+      border: 1px solid #2a2a2a;
+      border-radius: var(--r);
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+      text-align: center;
+      margin-top: 0.6rem;
+    }
+
+    .btn-secondary:hover { color: var(--text); border-color: #444; }
+
+    /* ── Results ─────────────────────────────────────────────────── */
+    #results-section { display: none; }
+
+    .results-summary {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 0.9rem 1.1rem;
+      font-size: 0.88rem;
+      color: var(--muted);
+      margin-bottom: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .txt-gold { color: var(--gold); font-weight: 600; }
+    .txt-err  { color: var(--err);  font-weight: 600; }
+
+    /* ── Spinner ─────────────────────────────────────────────────── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .spinner {
+      display: inline-block;
+      width: 13px;
+      height: 13px;
+      border: 2px solid rgba(0,0,0,0.25);
+      border-top-color: #000;
+      border-radius: 50%;
+      animation: spin 0.55s linear infinite;
+      vertical-align: middle;
+      margin-right: 0.4rem;
+    }
+
+    /* spinner on grey bg (file list) */
+    .file-status .spinner {
+      border-color: rgba(255,255,255,0.15);
+      border-top-color: #fff;
+    }
+
+    /* ── Footer ──────────────────────────────────────────────────── */
+    footer {
+      text-align: center;
+      padding: 2rem 1.5rem;
+      font-size: 0.75rem;
+      color: #333;
+    }
+
+    footer a { color: #444; text-decoration: none; }
+    footer a:hover { color: var(--muted); }
+
+    /* ── Mobile ──────────────────────────────────────────────────── */
+    @media (max-width: 520px) {
+      .logo { font-size: 2.2rem; }
+      #drop-zone { padding: 2rem 1.25rem; }
+      .file-row { gap: 0.6rem; }
+      .file-status { min-width: 90px; font-size: 0.72rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="app">
+
+  <header>
+    <div class="logo">un<span class="gold">Vault</span></div>
+    <div class="tagline">unVault your PDFs. Because time is everything.</div>
+  </header>
+
+  <!-- Upload area: drop zone + privacy note (hidden during processing/complete) -->
+  <div id="upload-area">
+    <div id="drop-zone">
+      <div class="drop-icon">🔓</div>
+      <p><strong>Drop password-protected PDFs here</strong><br>or click to browse — multiple files supported</p>
+    </div>
+    <input type="file" id="file-input" accept=".pdf" multiple style="display:none">
+    <div class="privacy-badge">🔒 Your files never leave your browser. Everything runs locally.</div>
+  </div>
+
+  <!-- Progress bar (visible during processing and after complete) -->
+  <div id="progress-section">
+    <div class="progress-label" id="progress-label">Processing…</div>
+    <div class="progress-track">
+      <div class="progress-fill" id="progress-fill"></div>
+    </div>
+  </div>
+
+  <!-- File list (visible once files are added) -->
+  <div id="files-section">
+    <div class="files-header">
+      <h3 id="file-count">0 files</h3>
+      <button id="add-more">+ Add more files</button>
+    </div>
+    <div id="file-list"></div>
+  </div>
+
+  <!-- Password + unVault button (visible in loaded + processing states) -->
+  <div id="controls">
+    <div class="pw-wrap">
+      <input type="password" id="password" placeholder="Enter the password for these PDFs" autocomplete="off">
+      <button type="button" id="toggle-pw">Show</button>
+    </div>
+    <button class="btn-primary" id="unvault-btn" disabled>unVault All</button>
+  </div>
+
+  <!-- Results (visible after processing completes) -->
+  <div id="results-section">
+    <div class="results-summary" id="results-summary"></div>
+    <button class="btn-primary" id="download-btn">Download unVaulted PDFs</button>
+    <button class="btn-secondary" id="restart-btn">Start Over</button>
+  </div>
+
+</div>
+
+<footer>
+  Built by <a href="#">darKLoud digitAl</a> — where time is everything.
+</footer>
+
+<script>
+  // pdf.js needs to know where its web worker lives. The worker handles PDF
+  // parsing on a background thread so the browser UI stays responsive.
+  pdfjsLib.GlobalWorkerOptions.workerSrc =
+    'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+
+  // ── State ──────────────────────────────────────────────────────────
+  let files = []; // { file, name, size, status, error, resultBytes }
+  let phase = 'empty'; // 'empty' | 'loaded' | 'processing' | 'complete'
+
+  // ── DOM refs ───────────────────────────────────────────────────────
+  const $ = id => document.getElementById(id);
+  const uploadArea   = $('upload-area');
+  const dropZone     = $('drop-zone');
+  const fileInput    = $('file-input');
+  const filesSection = $('files-section');
+  const fileListEl   = $('file-list');
+  const fileCountEl  = $('file-count');
+  const addMoreBtn   = $('add-more');
+  const controls     = $('controls');
+  const passwordEl   = $('password');
+  const togglePwBtn  = $('toggle-pw');
+  const unvaultBtn   = $('unvault-btn');
+  const progressSec  = $('progress-section');
+  const progressFill = $('progress-fill');
+  const progressLbl  = $('progress-label');
+  const resultsSec   = $('results-section');
+  const resultsSumEl = $('results-summary');
+  const downloadBtn  = $('download-btn');
+  const restartBtn   = $('restart-btn');
+
+  // ── Phase management ───────────────────────────────────────────────
+  function setPhase(p) {
+    phase = p;
+    show(uploadArea,    p === 'empty' || p === 'loaded');
+    show(filesSection,  p !== 'empty');
+    show(controls,      p === 'loaded' || p === 'processing');
+    show(progressSec,   p === 'processing' || p === 'complete');
+    show(resultsSec,    p === 'complete');
+    addMoreBtn.style.visibility = p === 'loaded' ? 'visible' : 'hidden';
+    syncBtn();
+  }
+
+  function show(el, visible) {
+    el.style.display = visible ? '' : 'none';
+  }
+
+  // ── Button state ───────────────────────────────────────────────────
+  function syncBtn() {
+    const ready = files.length > 0 && passwordEl.value.length > 0 && phase === 'loaded';
+    unvaultBtn.disabled = !ready;
+    if (phase !== 'processing') unvaultBtn.innerHTML = 'unVault All';
+  }
+
+  // ── File management ────────────────────────────────────────────────
+  function addFiles(list) {
+    const pdfs = [...list].filter(f => f.name.toLowerCase().endsWith('.pdf'));
+    if (!pdfs.length) return;
+    pdfs.forEach(f => files.push({
+      file: f, name: f.name, size: f.size,
+      status: 'pending', error: null, resultBytes: null
+    }));
+    render();
+    setPhase('loaded');
+  }
+
+  function removeFile(i) {
+    files.splice(i, 1);
+    render();
+    if (!files.length) setPhase('empty');
+    else syncBtn();
+  }
+
+  // ── Render file list ───────────────────────────────────────────────
+  function render() {
+    const n = files.length;
+    fileCountEl.textContent = n === 1 ? '1 file' : `${n} files`;
+    fileListEl.innerHTML = '';
+    files.forEach((f, i) => {
+      const row = document.createElement('div');
+      row.className = 'file-row';
+      row.innerHTML = `
+        <div>
+          <div class="file-name" title="${esc(f.name)}">${esc(f.name)}</div>
+          <div class="file-meta">${fmtBytes(f.size)}</div>
+        </div>
+        <div class="file-status ${f.status}" id="st-${i}">${statusHtml(f)}</div>
+        <button class="remove-btn${phase !== 'loaded' ? ' hidden' : ''}"
+                onclick="removeFile(${i})" title="Remove">✕</button>
+      `;
+      fileListEl.appendChild(row);
+    });
+  }
+
+  function updateStatus(i) {
+    const el = $(`st-${i}`);
+    if (!el) return;
+    const f = files[i];
+    el.className = `file-status ${f.status}`;
+    el.innerHTML = statusHtml(f);
+  }
+
+  function statusHtml(f) {
+    switch (f.status) {
+      case 'pending':    return '⏳ Waiting';
+      case 'processing': return '<span class="spinner"></span>Processing…';
+      case 'done':       return '✅ unVaulted';
+      case 'failed':     return `❌ ${esc(f.error || 'Failed')}`;
+      default:           return '';
+    }
+  }
+
+  // ── Progress bar ───────────────────────────────────────────────────
+  function setProgress(idx, total, done = false, ok = 0) {
+    progressFill.style.width = total ? `${(idx / total) * 100}%` : '0%';
+    progressLbl.textContent = done
+      ? `Done — ${ok} of ${total} unVaulted successfully`
+      : `unVaulting ${idx + 1} of ${total}…`;
+  }
+
+  // ── Process all files ──────────────────────────────────────────────
+  async function processAll() {
+    const password = passwordEl.value;
+
+    unvaultBtn.innerHTML = '<span class="spinner"></span>unVaulting…';
+    unvaultBtn.disabled = true;
+    setPhase('processing');
+    render();
+
+    let ok = 0, fail = 0;
+
+    for (let i = 0; i < files.length; i++) {
+      files[i].status = 'processing';
+      updateStatus(i);
+      setProgress(i, files.length);
+
+      const res = await processFile(files[i].file, password);
+
+      if (res.success) {
+        files[i].status = 'done';
+        files[i].resultBytes = res.bytes;
+        ok++;
+      } else {
+        files[i].status = 'failed';
+        files[i].error  = res.error;
+        fail++;
+      }
+      updateStatus(i);
+    }
+
+    progressFill.style.width = '100%';
+    setProgress(files.length, files.length, true, ok);
+
+    // Results summary
+    if (fail === 0) {
+      resultsSumEl.innerHTML =
+        `<span class="txt-gold">${ok} file${ok !== 1 ? 's' : ''}</span> unVaulted successfully.`;
+    } else if (ok === 0) {
+      resultsSumEl.innerHTML =
+        `<span class="txt-err">All ${fail} files failed</span> — check your password.`;
+      downloadBtn.disabled = true;
+    } else {
+      resultsSumEl.innerHTML =
+        `<span class="txt-gold">${ok} of ${files.length}</span> files unVaulted successfully. ` +
+        `<span class="txt-err">${fail} failed</span> — wrong password or unreadable.`;
+    }
+
+    setPhase('complete');
+  }
+
+  // ── Process one file ───────────────────────────────────────────────
+  async function processFile(file, password) {
+    let bytes;
+    try {
+      bytes = await readBytes(file);
+    } catch {
+      return { success: false, error: 'Could not read file' };
+    }
+
+    // ── Step 1: Is the PDF encrypted? ──────────────────────────────
+    // Try loading with NO password. Unencrypted PDFs load fine.
+    // Encrypted ones throw PasswordException (code: NEED_PASSWORD).
+    let encrypted = true;
+    try {
+      await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
+      encrypted = false;
+    } catch (e) {
+      if (e.name !== 'PasswordException') {
+        return { success: false, error: 'Could not read file' };
+      }
+    }
+
+    // Not encrypted → include original file bytes unchanged in the zip
+    if (!encrypted) return { success: true, bytes };
+
+    // ── Step 2: Try pdf-lib direct decrypt (best quality) ──────────
+    // pdf-lib can decrypt RC4 and AES-128 encrypted PDFs and re-save them
+    // without encryption, preserving text selectability. If this works,
+    // the output is a proper text PDF — much better than the canvas fallback.
+    try {
+      const doc = await PDFLib.PDFDocument.load(bytes.slice(0), { password });
+      return { success: true, bytes: await doc.save() };
+    } catch {
+      // pdf-lib couldn't handle this encryption (likely AES-256 from modern banks).
+      // Fall through to the canvas approach.
+    }
+
+    // ── Step 3: pdf.js decrypt → canvas → pdf-lib re-wrap ──────────
+    // Why this works: pdf.js decrypts the PDF in memory and renders each page
+    // as pixels on an HTML canvas. We then screenshot each canvas as a PNG and
+    // use pdf-lib to embed those images into a new, unencrypted PDF.
+    //
+    // The tradeoff: output is image-based (not text-selectable), but the
+    // content is fully legible and suitable for tax filing. For bank
+    // statements you're archiving rather than copy-pasting, this is fine.
+    let pdfJsDoc;
+    try {
+      pdfJsDoc = await pdfjsLib.getDocument({ data: bytes.slice(0), password }).promise;
+    } catch (e) {
+      return {
+        success: false,
+        error: e.name === 'PasswordException' ? 'Wrong password' : 'Could not read file'
+      };
+    }
+
+    try {
+      const out = await PDFLib.PDFDocument.create();
+
+      for (let n = 1; n <= pdfJsDoc.numPages; n++) {
+        const page     = await pdfJsDoc.getPage(n);
+        // Render at 2× scale for crispness. The PDF page will be sized at 1×,
+        // so the image has twice the pixel density — roughly 144 DPI.
+        const vp       = page.getViewport({ scale: 2 });
+        const canvas   = document.createElement('canvas');
+        canvas.width   = vp.width;
+        canvas.height  = vp.height;
+
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
+
+        // canvas.toDataURL gives base64 PNG. Decode it to raw bytes for pdf-lib.
+        const b64      = canvas.toDataURL('image/png').split(',')[1];
+        const pngBytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+
+        const img   = await out.embedPng(pngBytes);
+        // PDF page dimensions in points (1 point = 1/72 inch). Canvas was 2×,
+        // so divide by 2 to get the correct 1× page size.
+        const pw    = vp.width  / 2;
+        const ph    = vp.height / 2;
+        const outPg = out.addPage([pw, ph]);
+        outPg.drawImage(img, { x: 0, y: 0, width: pw, height: ph });
+      }
+
+      return { success: true, bytes: await out.save() };
+    } catch {
+      return { success: false, error: 'Processing failed' };
+    }
+  }
+
+  // ── Zip download ───────────────────────────────────────────────────
+  async function downloadZip() {
+    const zip = new JSZip();
+    files.filter(f => f.status === 'done')
+         .forEach(f => zip.file(f.name, f.resultBytes));
+    const blob = await zip.generateAsync({ type: 'blob' });
+    saveAs(blob, zipName());
+  }
+
+  function zipName() {
+    const d = new Date();
+    const p = n => String(n).padStart(2, '0');
+    return `unvaulted-pdfs-${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}.zip`;
+  }
+
+  // ── Utilities ──────────────────────────────────────────────────────
+  function readBytes(file) {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload  = e => res(new Uint8Array(e.target.result));
+      r.onerror = () => rej(new Error('read error'));
+      r.readAsArrayBuffer(file);
+    });
+  }
+
+  function fmtBytes(b) {
+    if (b < 1024)    return b + ' B';
+    if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+    return (b / 1048576).toFixed(1) + ' MB';
+  }
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g,
+      c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  // ── Event listeners ────────────────────────────────────────────────
+  dropZone.addEventListener('click', () => fileInput.click());
+
+  dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragenter', e => { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', e => {
+    if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('drag-over');
+  });
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    addFiles(e.dataTransfer.files);
+  });
+
+  fileInput.addEventListener('change', e => {
+    addFiles(e.target.files);
+    fileInput.value = ''; // allows re-selecting the same file
+  });
+
+  addMoreBtn.addEventListener('click', () => fileInput.click());
+
+  passwordEl.addEventListener('input', syncBtn);
+
+  togglePwBtn.addEventListener('click', () => {
+    const show = passwordEl.type === 'password';
+    passwordEl.type = show ? 'text' : 'password';
+    togglePwBtn.textContent = show ? 'Hide' : 'Show';
+  });
+
+  unvaultBtn.addEventListener('click', () => {
+    if (!unvaultBtn.disabled) processAll();
+  });
+
+  downloadBtn.addEventListener('click', downloadZip);
+
+  restartBtn.addEventListener('click', () => {
+    files = [];
+    passwordEl.value = '';
+    progressFill.style.width = '0%';
+    downloadBtn.disabled = false;
+    render();
+    setPhase('empty');
+  });
+</script>
+
+</body>
+</html>
