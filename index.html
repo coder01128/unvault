@@ -481,7 +481,9 @@
   }
 
   function show(el, visible) {
-    el.style.display = visible ? '' : 'none';
+    // Must use an explicit value, not '' — '' removes the inline style and
+    // the CSS `display: none` on these sections would win, keeping them hidden.
+    el.style.display = visible ? 'block' : 'none';
   }
 
   // ── Button state ───────────────────────────────────────────────────
@@ -742,10 +744,12 @@
   dropZone.addEventListener('drop', e => {
     e.preventDefault();
     dropZone.classList.remove('drag-over');
+    console.log('[unVault] drop fired —', e.dataTransfer.files.length, 'file(s)');
     addFiles(e.dataTransfer.files);
   });
 
   fileInput.addEventListener('change', e => {
+    console.log('[unVault] fileInput change fired —', e.target.files.length, 'file(s)');
     addFiles(e.target.files);
     fileInput.value = ''; // allows re-selecting the same file
   });
