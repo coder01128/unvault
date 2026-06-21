@@ -447,6 +447,23 @@
   let files = []; // { file, name, size, status, error, resultBytes }
   let phase = 'empty'; // 'empty' | 'loaded' | 'processing' | 'complete'
 
+  // ── mupdf WASM ─────────────────────────────────────────────────────
+  // mupdf is the primary text-preserving decryption engine. It handles
+  // AES-256 (and all other encryption types) that pdf-lib can't.
+  // We kick off the 10 MB WASM fetch immediately on page load so it's
+  // (usually) ready before the user hits unVault All.
+  // mupdf-wasm.js uses import.meta.url to self-resolve the .wasm URL
+  // relative to its own CDN path — no local hosting needed.
+  let _mupdfPromise = null;
+  function ensureMupdf() {
+    if (!_mupdfPromise) {
+      _mupdfPromise = import('https://unpkg.com/mupdf@1.27.0/dist/mupdf.js')
+        .catch(e => { console.warn('[unVault] mupdf failed to load:', e); return null; });
+    }
+    return _mupdfPromise;
+  }
+  ensureMupdf(); // start fetching in background immediately
+
   // ── DOM refs ───────────────────────────────────────────────────────
   const $ = id => document.getElementById(id);
   const uploadArea   = $('upload-area');
@@ -619,8 +636,8 @@
     }
 
     // ── Step 1: Is the PDF encrypted? ──────────────────────────────
-    // Try loading with NO password. Unencrypted PDFs load fine.
-    // Encrypted ones throw PasswordException (code: NEED_PASSWORD).
+    // Try loading with NO password. Unencrypted PDFs open fine.
+    // Encrypted ones throw PasswordException (NEED_PASSWORD code).
     let encrypted = true;
     try {
       await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
@@ -631,29 +648,72 @@
       }
     }
 
-    // Not encrypted → include original file bytes unchanged in the zip
+    // Not encrypted → return original bytes unchanged in the zip
     if (!encrypted) return { success: true, bytes };
 
-    // ── Step 2: Try pdf-lib direct decrypt (best quality) ──────────
-    // pdf-lib can decrypt RC4 and AES-128 encrypted PDFs and re-save them
-    // without encryption, preserving text selectability. If this works,
-    // the output is a proper text PDF — much better than the canvas fallback.
+    // ── Step 2: pdf-lib direct decrypt ─────────────────────────────
+    // Handles RC4-40, RC4-128, AES-128. Preserves full text layer.
     try {
       const doc = await PDFLib.PDFDocument.load(bytes.slice(0), { password });
       return { success: true, bytes: await doc.save() };
-    } catch {
-      // pdf-lib couldn't handle this encryption (likely AES-256 from modern banks).
-      // Fall through to the canvas approach.
+    } catch { /* AES-256 or unknown → fall through */ }
+
+    // ── Step 3: pdf-lib ignoreEncryption ───────────────────────────
+    // Loads the PDF structure while bypassing the security handler.
+    // Works when content streams are not actually encrypted (rare, but
+    // some owner-permission-only PDFs fall into this category).
+    // We verify output with pdf.js: garbled content produces 0 page
+    // operators; real content produces >0 even for image-only pages.
+    try {
+      const doc   = await PDFLib.PDFDocument.load(bytes.slice(0), { ignoreEncryption: true });
+      const saved = await doc.save();
+      const check = await pdfjsLib.getDocument({ data: saved.slice(0) }).promise;
+      const pg    = await check.getPage(1);
+      const ops   = await pg.getOperatorList();
+      if (ops.fnArray.length > 0) return { success: true, bytes: saved };
+    } catch { /* garbled output → fall through */ }
+
+    // ── Step 4: mupdf WASM — structural decrypt ─────────────────────
+    // mupdf decrypts at the PDF-object level using the correct AES key,
+    // preserving the full text and vector layer — equivalent to running
+    // `qpdf --decrypt` but entirely in WebAssembly inside the browser.
+    // encrypt=none in saveToBuffer strips the security dict on output.
+    try {
+      const mupdf = await ensureMupdf();
+      if (mupdf) {
+        const doc = mupdf.Document.openDocument(bytes.slice(0), 'application/pdf');
+
+        if (doc.needsPassword()) {
+          // authenticatePassword returns a bitmask — 0 means failed
+          const ok = doc.authenticatePassword(password);
+          if (!ok) {
+            doc.destroy();
+            return { success: false, error: 'Wrong password' };
+          }
+        }
+
+        const pdfDoc = doc.asPDF();
+        const buf    = pdfDoc.saveToBuffer('garbage,encrypt=none');
+        // asUint8Array() is a view into WASM heap — copy before destroy
+        const outBytes = new Uint8Array(buf.asUint8Array());
+        buf.destroy();
+        doc.destroy();
+
+        return { success: true, bytes: outBytes };
+      }
+    } catch (e) {
+      // mupdf signals wrong password via an error message, not a typed exception
+      if (/password|incorrect|authentication/i.test(e.message || '')) {
+        return { success: false, error: 'Wrong password' };
+      }
+      console.warn('[unVault] mupdf error:', e.message);
+      // fall through to canvas
     }
 
-    // ── Step 3: pdf.js decrypt → canvas → pdf-lib re-wrap ──────────
-    // Why this works: pdf.js decrypts the PDF in memory and renders each page
-    // as pixels on an HTML canvas. We then screenshot each canvas as a PNG and
-    // use pdf-lib to embed those images into a new, unencrypted PDF.
-    //
-    // The tradeoff: output is image-based (not text-selectable), but the
-    // content is fully legible and suitable for tax filing. For bank
-    // statements you're archiving rather than copy-pasting, this is fine.
+    // ── Step 5: pdf.js → canvas → pdf-lib re-wrap (last resort) ────
+    // pdf.js decrypts in memory and renders each page to an HTML canvas.
+    // We screenshot each canvas as PNG and wrap the images into a new PDF.
+    // Output is not text-selectable — use only if all steps above fail.
     let pdfJsDoc;
     try {
       pdfJsDoc = await pdfjsLib.getDocument({ data: bytes.slice(0), password }).promise;
@@ -668,27 +728,20 @@
       const out = await PDFLib.PDFDocument.create();
 
       for (let n = 1; n <= pdfJsDoc.numPages; n++) {
-        const page     = await pdfJsDoc.getPage(n);
-        // Render at 2× scale for crispness. The PDF page will be sized at 1×,
-        // so the image has twice the pixel density — roughly 144 DPI.
-        const vp       = page.getViewport({ scale: 2 });
-        const canvas   = document.createElement('canvas');
-        canvas.width   = vp.width;
-        canvas.height  = vp.height;
+        const page = await pdfJsDoc.getPage(n);
+        // 2× scale for quality — canvas renders at 144 dpi, PDF page sized at 72 dpi
+        const vp   = page.getViewport({ scale: 2 });
+        const canvas = document.createElement('canvas');
+        canvas.width  = vp.width;
+        canvas.height = vp.height;
 
         await page.render({ canvasContext: canvas.getContext('2d'), viewport: vp }).promise;
 
-        // canvas.toDataURL gives base64 PNG. Decode it to raw bytes for pdf-lib.
         const b64      = canvas.toDataURL('image/png').split(',')[1];
         const pngBytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
-
-        const img   = await out.embedPng(pngBytes);
-        // PDF page dimensions in points (1 point = 1/72 inch). Canvas was 2×,
-        // so divide by 2 to get the correct 1× page size.
-        const pw    = vp.width  / 2;
-        const ph    = vp.height / 2;
-        const outPg = out.addPage([pw, ph]);
-        outPg.drawImage(img, { x: 0, y: 0, width: pw, height: ph });
+        const img      = await out.embedPng(pngBytes);
+        const pw = vp.width / 2, ph = vp.height / 2;
+        out.addPage([pw, ph]).drawImage(img, { x: 0, y: 0, width: pw, height: ph });
       }
 
       return { success: true, bytes: await out.save() };
