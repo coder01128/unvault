@@ -359,6 +359,42 @@
       border-top-color: #fff;
     }
 
+    /* ── Privacy box ─────────────────────────────────────────────── */
+    .privacy-box {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 0 1.5rem 2rem;
+    }
+
+    .privacy-box-inner {
+      border: 1px solid var(--gold);
+      border-radius: var(--r);
+      background: #0f0f0a;
+      padding: 1.25rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+
+    .privacy-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      font-size: 0.84rem;
+      color: #aaaaaa;
+      line-height: 1.5;
+    }
+
+    .privacy-icon {
+      flex-shrink: 0;
+      font-size: 1rem;
+      margin-top: 0.05rem;
+    }
+
+    .privacy-row strong {
+      color: var(--text);
+    }
+
     /* ── Footer ──────────────────────────────────────────────────── */
     footer {
       text-align: center;
@@ -431,6 +467,23 @@
     <button class="btn-secondary" id="restart-btn">Start Over</button>
   </div>
 
+</div>
+
+<div class="privacy-box">
+  <div class="privacy-box-inner">
+    <div class="privacy-row">
+      <span class="privacy-icon">🔒</span>
+      <span><strong>Your files never leave your browser.</strong> All decryption happens entirely on your device — nothing is uploaded to any server.</span>
+    </div>
+    <div class="privacy-row">
+      <span class="privacy-icon">🚫</span>
+      <span>No analytics, no tracking, no file logging. This page has no backend.</span>
+    </div>
+    <div class="privacy-row">
+      <span class="privacy-icon">💡</span>
+      <span>When finished, close this tab to clear any passwords and file data from browser memory.</span>
+    </div>
+  </div>
 </div>
 
 <footer>
