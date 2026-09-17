@@ -21,14 +21,15 @@
   <style>
     /* ── Design tokens ─────────────────────────────────────────── */
     :root {
-      --bg:         #0a0a0a;
-      --bg-card:    #111111;
-      --border:     #222222;
-      --text:       #ffffff;
-      --muted:      #888888;
-      --gold:       #FFD700;
-      --gold-hover: #FFE033;
-      --err:        #ff4444;
+      --bg:         #edf2e0;
+      --bg-card:    #ffffff;
+      --border:     #c8d4b0;
+      --text:       #1a2e1a;
+      --muted:      #5a6b52;
+      --gold:       #7a5c10;
+      --gold-btn:   #daa520;
+      --gold-hover: #c4920f;
+      --err:        #c0392b;
       --r:          8px;
       --r-lg:       12px;
     }
@@ -79,7 +80,7 @@
     #upload-area { margin-bottom: 1.5rem; }
 
     #drop-zone {
-      border: 2px dashed #333;
+      border: 2px dashed var(--border);
       border-radius: var(--r-lg);
       background: var(--bg-card);
       padding: 3rem 2rem;
@@ -92,7 +93,7 @@
     #drop-zone:hover,
     #drop-zone.drag-over {
       border-color: var(--gold);
-      background: #131300;
+      background: #e0e8d0;
     }
 
     .drop-icon {
@@ -112,8 +113,8 @@
 
     .privacy-badge {
       text-align: center;
-      font-size: 0.78rem;
-      color: #555;
+      font-size: 0.8125rem;
+      color: var(--muted);
       margin-top: 0.75rem;
     }
 
@@ -124,21 +125,21 @@
     }
 
     .progress-label {
-      font-size: 0.82rem;
+      font-size: 0.8125rem;
       color: var(--muted);
       margin-bottom: 0.4rem;
     }
 
     .progress-track {
       height: 3px;
-      background: #222;
+      background: var(--border);
       border-radius: 2px;
       overflow: hidden;
     }
 
     .progress-fill {
       height: 100%;
-      background: var(--gold);
+      background: var(--gold-btn);
       border-radius: 2px;
       transition: width 0.25s ease;
       width: 0%;
@@ -155,7 +156,7 @@
     }
 
     .files-header h3 {
-      font-size: 0.75rem;
+      font-size: 0.8125rem;
       font-weight: 600;
       color: var(--muted);
       text-transform: uppercase;
@@ -163,7 +164,7 @@
     }
 
     #add-more {
-      font-size: 0.82rem;
+      font-size: 0.8125rem;
       color: var(--gold);
       background: none;
       border: none;
@@ -202,13 +203,13 @@
     }
 
     .file-meta {
-      font-size: 0.72rem;
+      font-size: 0.8125rem;
       color: var(--muted);
       margin-top: 1px;
     }
 
     .file-status {
-      font-size: 0.78rem;
+      font-size: 0.8125rem;
       white-space: nowrap;
       min-width: 120px;
       text-align: right;
@@ -222,7 +223,7 @@
     .remove-btn {
       background: none;
       border: none;
-      color: #444;
+      color: var(--muted);
       cursor: pointer;
       font-size: 0.9rem;
       padding: 0.25rem 0.35rem;
@@ -231,7 +232,7 @@
       transition: color 0.12s, background 0.12s;
     }
 
-    .remove-btn:hover { color: var(--err); background: rgba(255,68,68,0.08); }
+    .remove-btn:hover { color: var(--err); background: rgba(192,57,43,0.08); }
     .hidden { display: none !important; }
 
     /* ── Controls ───────────────────────────────────────────────── */
@@ -255,8 +256,8 @@
       transition: border-color 0.15s;
     }
 
-    #password:focus { border-color: #3a3a3a; }
-    #password::placeholder { color: #444; }
+    #password:focus { border-color: #a0b890; }
+    #password::placeholder { color: #8a9680; }
 
     #toggle-pw {
       position: absolute;
@@ -267,7 +268,7 @@
       border: none;
       color: var(--muted);
       cursor: pointer;
-      font-size: 0.78rem;
+      font-size: 0.8125rem;
       font-family: inherit;
       font-weight: 500;
       padding: 0;
@@ -281,7 +282,7 @@
       display: block;
       width: 100%;
       padding: 0.9rem;
-      background: var(--gold);
+      background: var(--gold-btn);
       color: #000;
       font-family: inherit;
       font-size: 1rem;
@@ -297,8 +298,8 @@
     .btn-primary:hover:not(:disabled) { background: var(--gold-hover); }
 
     .btn-primary:disabled {
-      background: #333;
-      color: #555;
+      background: #d4dcc4;
+      color: #8a9680;
       cursor: not-allowed;
     }
 
@@ -311,7 +312,7 @@
       font-family: inherit;
       font-size: 0.95rem;
       font-weight: 500;
-      border: 1px solid #2a2a2a;
+      border: 1px solid var(--border);
       border-radius: var(--r);
       cursor: pointer;
       transition: color 0.15s, border-color 0.15s;
@@ -319,7 +320,7 @@
       margin-top: 0.6rem;
     }
 
-    .btn-secondary:hover { color: var(--text); border-color: #444; }
+    .btn-secondary:hover { color: var(--text); border-color: #8a9680; }
 
     /* ── Results ─────────────────────────────────────────────────── */
     #results-section { display: none; }
@@ -355,8 +356,8 @@
 
     /* spinner on grey bg (file list) */
     .file-status .spinner {
-      border-color: rgba(255,255,255,0.15);
-      border-top-color: #fff;
+      border-color: rgba(0,0,0,0.15);
+      border-top-color: var(--text);
     }
 
     /* ── Privacy box ─────────────────────────────────────────────── */
@@ -367,9 +368,9 @@
     }
 
     .privacy-box-inner {
-      border: 1px solid var(--gold);
+      border: 1px solid var(--gold-btn);
       border-radius: var(--r);
-      background: #0f0f0a;
+      background: #f5f8ee;
       padding: 1.25rem 1.5rem;
       display: flex;
       flex-direction: column;
@@ -380,8 +381,8 @@
       display: flex;
       align-items: flex-start;
       gap: 0.75rem;
-      font-size: 0.84rem;
-      color: #aaaaaa;
+      font-size: 0.8125rem;
+      color: var(--muted);
       line-height: 1.5;
     }
 
@@ -395,23 +396,12 @@
       color: var(--text);
     }
 
-    /* ── Footer ──────────────────────────────────────────────────── */
-    footer {
-      text-align: center;
-      padding: 2rem 1.5rem;
-      font-size: 0.75rem;
-      color: #333;
-    }
-
-    footer a { color: #444; text-decoration: none; }
-    footer a:hover { color: var(--muted); }
-
     /* ── Mobile ──────────────────────────────────────────────────── */
     @media (max-width: 520px) {
       .logo { font-size: 2.2rem; }
       #drop-zone { padding: 2rem 1.25rem; }
       .file-row { gap: 0.6rem; }
-      .file-status { min-width: 90px; font-size: 0.72rem; }
+      .file-status { min-width: 90px; }
     }
   </style>
 </head>
@@ -486,9 +476,6 @@
   </div>
 </div>
 
-<footer>
-  Built by <a href="#">darKLoud digitAl</a> — where time is everything.
-</footer>
 
 <script>
   // pdf.js needs to know where its web worker lives. The worker handles PDF
