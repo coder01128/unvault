@@ -21,14 +21,14 @@
   <style>
     /* ── Design tokens ─────────────────────────────────────────── */
     :root {
-      --bg:         #edf2e0;
+      --bg:         #ede4f5;
       --bg-card:    #ffffff;
-      --border:     #c8d4b0;
-      --text:       #1a2e1a;
-      --muted:      #5a6b52;
-      --gold:       #7a5c10;
-      --gold-btn:   #daa520;
-      --gold-hover: #c4920f;
+      --border:     #d4c8e0;
+      --text:       #2a1e3a;
+      --muted:      #6b5a7a;
+      --gold:       #7a5800;
+      --gold-btn:   #eab308;
+      --gold-hover: #d4a006;
       --err:        #c0392b;
       --r:          8px;
       --r-lg:       12px;
@@ -93,7 +93,7 @@
     #drop-zone:hover,
     #drop-zone.drag-over {
       border-color: var(--gold);
-      background: #e0e8d0;
+      background: #e0d8ec;
     }
 
     .drop-icon {
@@ -256,8 +256,8 @@
       transition: border-color 0.15s;
     }
 
-    #password:focus { border-color: #a0b890; }
-    #password::placeholder { color: #8a9680; }
+    #password:focus { border-color: #b8a8d0; }
+    #password::placeholder { color: #a098b0; }
 
     #toggle-pw {
       position: absolute;
@@ -298,8 +298,8 @@
     .btn-primary:hover:not(:disabled) { background: var(--gold-hover); }
 
     .btn-primary:disabled {
-      background: #d4dcc4;
-      color: #8a9680;
+      background: #d8d0e4;
+      color: #a098b0;
       cursor: not-allowed;
     }
 
@@ -320,7 +320,7 @@
       margin-top: 0.6rem;
     }
 
-    .btn-secondary:hover { color: var(--text); border-color: #8a9680; }
+    .btn-secondary:hover { color: var(--text); border-color: #a098b0; }
 
     /* ── Results ─────────────────────────────────────────────────── */
     #results-section { display: none; }
@@ -370,7 +370,7 @@
     .privacy-box-inner {
       border: 1px solid var(--gold-btn);
       border-radius: var(--r);
-      background: #f5f8ee;
+      background: #f5f0fa;
       padding: 1.25rem 1.5rem;
       display: flex;
       flex-direction: column;
