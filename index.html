@@ -21,15 +21,14 @@
   <style>
     /* ── Design tokens ─────────────────────────────────────────── */
     :root {
-      --bg:         #ede4f5;
-      --bg-card:    #ffffff;
-      --border:     #d4c8e0;
-      --text:       #2a1e3a;
-      --muted:      #6b5a7a;
-      --gold:       #7a5800;
-      --gold-btn:   #eab308;
-      --gold-hover: #d4a006;
-      --err:        #c0392b;
+      --bg:         #2c2c2c;
+      --bg-card:    #363636;
+      --border:     #4a4a4a;
+      --text:       #ffffff;
+      --muted:      #a0a0a0;
+      --gold:       #FFD700;
+      --gold-hover: #FFE033;
+      --err:        #ff7070;
       --r:          8px;
       --r-lg:       12px;
     }
@@ -44,6 +43,17 @@
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+    }
+
+    /* Film-grain overlay via SVG noise — purely cosmetic, clicks pass through */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      pointer-events: none;
+      opacity: 0.06;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)'/%3E%3C/svg%3E");
     }
 
     /* ── Layout ─────────────────────────────────────────────────── */
@@ -93,7 +103,7 @@
     #drop-zone:hover,
     #drop-zone.drag-over {
       border-color: var(--gold);
-      background: #e0d8ec;
+      background: #333333;
     }
 
     .drop-icon {
@@ -139,7 +149,7 @@
 
     .progress-fill {
       height: 100%;
-      background: var(--gold-btn);
+      background: var(--gold);
       border-radius: 2px;
       transition: width 0.25s ease;
       width: 0%;
@@ -232,7 +242,7 @@
       transition: color 0.12s, background 0.12s;
     }
 
-    .remove-btn:hover { color: var(--err); background: rgba(192,57,43,0.08); }
+    .remove-btn:hover { color: var(--err); background: rgba(255,112,112,0.12); }
     .hidden { display: none !important; }
 
     /* ── Controls ───────────────────────────────────────────────── */
@@ -256,8 +266,8 @@
       transition: border-color 0.15s;
     }
 
-    #password:focus { border-color: #b8a8d0; }
-    #password::placeholder { color: #a098b0; }
+    #password:focus { border-color: #555555; }
+    #password::placeholder { color: #777777; }
 
     #toggle-pw {
       position: absolute;
@@ -282,7 +292,7 @@
       display: block;
       width: 100%;
       padding: 0.9rem;
-      background: var(--gold-btn);
+      background: var(--gold);
       color: #000;
       font-family: inherit;
       font-size: 1rem;
@@ -298,8 +308,8 @@
     .btn-primary:hover:not(:disabled) { background: var(--gold-hover); }
 
     .btn-primary:disabled {
-      background: #d8d0e4;
-      color: #a098b0;
+      background: #444444;
+      color: #666666;
       cursor: not-allowed;
     }
 
@@ -320,7 +330,7 @@
       margin-top: 0.6rem;
     }
 
-    .btn-secondary:hover { color: var(--text); border-color: #a098b0; }
+    .btn-secondary:hover { color: var(--text); border-color: #666666; }
 
     /* ── Results ─────────────────────────────────────────────────── */
     #results-section { display: none; }
@@ -356,8 +366,8 @@
 
     /* spinner on grey bg (file list) */
     .file-status .spinner {
-      border-color: rgba(0,0,0,0.15);
-      border-top-color: var(--text);
+      border-color: rgba(255,255,255,0.15);
+      border-top-color: #fff;
     }
 
     /* ── Privacy box ─────────────────────────────────────────────── */
@@ -368,9 +378,9 @@
     }
 
     .privacy-box-inner {
-      border: 1px solid var(--gold-btn);
+      border: 1px solid var(--gold);
       border-radius: var(--r);
-      background: #f5f0fa;
+      background: #333333;
       padding: 1.25rem 1.5rem;
       display: flex;
       flex-direction: column;
